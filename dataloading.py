@@ -8,7 +8,6 @@ MAXLEN = 15
 logger = logging.getLogger(__name__)
 
 
-# TODO: sos, eos
 class Data(object):
     def __init__(self, data_dir, file):
         self.name = file
@@ -34,9 +33,11 @@ class Data(object):
 
     def build_field(self, maxlen=None):
         src_field= Field(include_lengths=True, batch_first=True,
-                        preprocessing=lambda x: x[:maxlen+1])
+                        preprocessing=lambda x: x[:maxlen+1],
+                        eos_token='<eos>')
         trg_field = Field(include_lengths=True, batch_first=True,
-                        preprocessing=lambda x: x[:maxlen+1])
+                        preprocessing=lambda x: x[:maxlen+1],
+                        eos_token='<eos>')
         return src_field, trg_field
 
     def build_dataset(self, src_field, trg_field):
@@ -50,9 +51,15 @@ class Data(object):
                                         ('trg', trg_field)])
         return train, val, test
 
+    # TODO: add sos token
     def build_vocab(self, src_field, trg_field, *args):
         # not using pretrained word vectors
         src_field.build_vocab(args, max_size=30000)
+        src_field.vocab.itos.insert(2, '<sos>')
+        from collections import defaultdict
+        stoi = defaultdict(lambda x:0)
+        stoi.update({tok: i for i, tok in enumerate(src_field.vocab.itos)})
+        src_field.vocab.stoi = stoi
         trg_field.vocab = src_field.vocab
         return src_field.vocab
 

@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 if  __name__ == "__main__":
 
-    logger.info('loaded data from... {}{}'.format(DATA_DIR, FILE))
+    logger.info('loading data from... {}{}'.format(DATA_DIR, FILE))
     data = Data(DATA_DIR, FILE)
 
     #print(data.vocab.itos[:5])
