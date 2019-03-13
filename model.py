@@ -5,13 +5,13 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 # TODO: don't forget to truncate eos when feeding to decoder
 class VAELSTM(nn.Module):
-    def __init__(self, encoder, decoder, latent_dim=1100):
+    def __init__(self, encoder, decoder, hidden_dim=600, latent_dim=1100):
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
         # TODO: activation?
-        self.mu_linear = nn.Linear(hidden_size, latent_dim)
-        self.sig_linear = nn.Linear(hiddne_size, latent_dim)
+        self.mu_linear = nn.Linear(hidden_dim, latent_dim)
+        self.sig_linear = nn.Linear(hidden_dim, latent_dim)
 
     def _reparameterize(self, mu, sig):
         z = torch.rand_like(mu) * sig + mu
@@ -27,8 +27,8 @@ class VAELSTM(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self):
-        super().__init__(vocab_size, hidden_dim=600)
+    def __init__(self, vocab_size, hidden_dim=600):
+        super().__init__()
         self.embedding = nn.Embedding(vocab_size, 300)
         self.lstm_orig = nn.LSTM(300, hidden_dim, batch_first=True)
         self.lstm_para = nn.LSTM(300, hidden_dim, batch_first=True)
@@ -39,7 +39,7 @@ class Encoder(nn.Module):
         orig = self.embedding(orig) # (B, l, 300)
         para = self.embedding(para)
         orig_packed = pack_padded_sequence(orig, orig_lengths,
-                                           batch_first=true)
+                                           batch_first=True)
         para_packed = pack_padded_sequence(para, para_lengths,
                                            batch_first=True)
         # TODO: try parallel encoding w/o dependencies
@@ -68,12 +68,14 @@ class Decoder(nn.Module):
         para_z = torch.cat([para, z.repeat(1, L, 1)], dim=-1) # (B, L, 1100+300)
         # z (B, 1, 1100)
         orig_packed = pack_padded_sequence(orig, orig_lengths,
-                                           batch_first=true)
-        para_z_packed = packed_padded_sequence(para_z, para_lengths,
-                                               batch_first=true)
+                                           batch_first=True)
+        para_z_packed = pack_padded_sequence(para_z, para_lengths,
+                                               batch_first=True)
         _, orig_hidden = self.lstm_orig(orig_packed)
         # (B, L, 600)
-        para_output, _ = self.lstm_para(para_packed, orig_hidden)
+        para_output_packed, _ = self.lstm_para(para_z_packed, orig_hidden)
+        para_output = pad_packed_sequence(para_output_packed, batch_first=True,
+                                          total_length=L)
         logits = self.linear(para_output)
         return logits # (B, L, vocab_size)
 
@@ -84,7 +86,7 @@ def build_VAE(vocab_size, hidden_dim, latent_dim, share_emb=False,
     decoder = Decoder(vocab_size, hidden_dim, latent_dim)
     if share_emb:
         decoder.embedding.weight = encoder.embedding.weight
-    vae = VAE(encoder, decoder, latent_dim)
-    return vae.to(device)
+    vaeLSTM = VAELSTM(encoder, decoder, hidden_dim, latent_dim)
+    return vaeLSTM.to(device)
 
 
