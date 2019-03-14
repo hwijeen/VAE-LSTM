@@ -1,11 +1,16 @@
 import logging
 from setproctitle import setproctitle
 
+import torch
+
 from dataloading import Data
+from model import build_VAELSTM
+from trainer import Trainer
 
 
-DATA_DIR = '/home/nlpgpu5/hwijeen/Paraphrase/data/'
+DATA_DIR = '/home/nlpgpu5/hwijeen/VAE-LSTM/data/'
 FILE = 'mscoco'
+DEVICE = torch.device('cuda:0')
 
 
 setproctitle("(paraphrase) testing")
@@ -16,7 +21,11 @@ logger = logging.getLogger(__name__)
 
 if  __name__ == "__main__":
 
-    logger.info('loading data from... {}{}'.format(DATA_DIR, FILE))
+    #logger.info('loading data from... {}{}'.format(DATA_DIR, FILE))
     data = Data(DATA_DIR, FILE)
+    vaeLSTM = build_VAELSTM(len(data.vocab), hidden_dim=600, latent_dim=1100,
+                            device=DEVICE)
+    trainer = Trainer(vaeLSTM, data)
 
-    #print(data.vocab.itos[:5])
+    trainer.train(epoch=1)
+

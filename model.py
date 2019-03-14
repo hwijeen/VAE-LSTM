@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
+from utils import append, truncate
 
-# TODO: don't forget to truncate eos when feeding to decoder
+
 class VAELSTM(nn.Module):
     def __init__(self, encoder, decoder, hidden_dim=600, latent_dim=1100):
         super().__init__()
@@ -11,19 +12,19 @@ class VAELSTM(nn.Module):
         self.decoder = decoder
         # TODO: activation?
         self.mu_linear = nn.Linear(hidden_dim, latent_dim)
-        self.sig_linear = nn.Linear(hidden_dim, latent_dim)
+        self.var_linear = nn.Linear(hidden_dim, latent_dim)
 
-    def _reparameterize(self, mu, sig):
-        z = torch.rand_like(mu) * sig + mu
+    def _reparameterize(self, mu, log_var):
+        z = torch.rand_like(mu) * (log_var/2).exp() + mu
         return z.unsqueeze(1) # (B, 1, 1100)
 
     def forward(self, orig, para):
         h_t = self.encoder(orig, para)
         mu = self.mu_linear(h_t)
-        sig = self.sig_linear(h_t)
-        z = self._reparameterize(mu, sig)
+        log_var = self.var_linear(h_t)
+        z = self._reparameterize(mu, log_var)
         logits = self.decoder(orig, para, z)
-        return logits, mu, sig # (B, L, vocab_size), (B, 1100), (B, 1100)
+        return logits, mu, log_var # (B, L, vocab_size), (B, 1100), (B, 1100)
 
 
 class Encoder(nn.Module):
@@ -40,13 +41,12 @@ class Encoder(nn.Module):
         para = self.embedding(para)
         orig_packed = pack_padded_sequence(orig, orig_lengths,
                                            batch_first=True)
-        para_packed = pack_padded_sequence(para, para_lengths,
-                                           batch_first=True)
         # TODO: try parallel encoding w/o dependencies
         _, orig_hidden = self.lstm_orig(orig_packed)
-        _, para_hidden = self.lstm_para(para_packed, orig_hidden)
-        h_t, _ = para_hidden
-        return h_t.squeeze(1) # (B, 600)
+        para_output, _ = self.lstm_para(para, orig_hidden)
+        B = para.size(0)
+        h_t = para_output[range(B), para_lengths-1]
+        return h_t
 
 
 class Decoder(nn.Module):
@@ -61,7 +61,7 @@ class Decoder(nn.Module):
 
     def forward(self, orig, para, z):
         orig, orig_lengths = orig # (B, l), (B,)
-        para, para_lengths = para
+        para, para_lengths = append(truncate(para, 'eos'), 'sos')
         orig = self.embedding(orig) # (B, l, 300)
         para = self.embedding(para)
         L = para.size(1)
@@ -69,18 +69,14 @@ class Decoder(nn.Module):
         # z (B, 1, 1100)
         orig_packed = pack_padded_sequence(orig, orig_lengths,
                                            batch_first=True)
-        para_z_packed = pack_padded_sequence(para_z, para_lengths,
-                                               batch_first=True)
         _, orig_hidden = self.lstm_orig(orig_packed)
         # (B, L, 600)
-        para_output_packed, _ = self.lstm_para(para_z_packed, orig_hidden)
-        para_output = pad_packed_sequence(para_output_packed, batch_first=True,
-                                          total_length=L)
+        para_output, _ = self.lstm_para(para_z, orig_hidden)
         logits = self.linear(para_output)
-        return logits # (B, L, vocab_size)
+        return logits, para_lengths # (B, L, vocab_size), (B,)
 
 
-def build_VAE(vocab_size, hidden_dim, latent_dim, share_emb=False,
+def build_VAELSTM(vocab_size, hidden_dim, latent_dim, share_emb=False,
               share_orig_enc=False, device=None):
     encoder = Encoder(vocab_size, hidden_dim)
     decoder = Decoder(vocab_size, hidden_dim, latent_dim)

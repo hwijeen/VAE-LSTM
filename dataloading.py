@@ -7,6 +7,11 @@ from torchtext.data import Field, TabularDataset, BucketIterator
 MAXLEN = 15
 logger = logging.getLogger(__name__)
 
+UNK_IDX = 0
+PAD_IDX = 1
+SOS_IDX = 2
+EOS_IDX = 3
+
 
 class Data(object):
     def __init__(self, data_dir, file):
@@ -17,13 +22,13 @@ class Data(object):
         self.build()
 
     def build(self):
-        self.src_field, self.trg_field = self.build_field(maxlen=MAXLEN)
+        self.ORIG, self.PARA = self.build_field(maxlen=MAXLEN)
         logger.info('building datasets... this takes a while')
         self.train, self.val, self.test =\
-            self.build_dataset(self.src_field, self.trg_field)
-        self.vocab = self.build_vocab(self.src_field, self.trg_field,
-                                      self.train.src, self.train.trg,
-                                      self.val.src, self.val.trg)
+            self.build_dataset(self.ORIG, self.PARA)
+        self.vocab = self.build_vocab(self.ORIG, self.PARA,
+                                      self.train.orig, self.train.para,
+                                      self.val.orig, self.val.para)
         self.train_iter, self.valid_iter, self.test_iter =\
             self.build_iterator(self.train, self.val, self.test)
         logger.info('data size... {} / {} / {}'.format(len(self.train),
@@ -32,41 +37,41 @@ class Data(object):
         logger.info('vocab size... {}'.format(len(self.vocab)))
 
     def build_field(self, maxlen=None):
-        src_field= Field(include_lengths=True, batch_first=True,
+        ORIG = Field(include_lengths=True, batch_first=True,
                         preprocessing=lambda x: x[:maxlen+1],
                         eos_token='<eos>')
-        trg_field = Field(include_lengths=True, batch_first=True,
+        PARA = Field(include_lengths=True, batch_first=True,
                         preprocessing=lambda x: x[:maxlen+1],
                         eos_token='<eos>')
-        return src_field, trg_field
+        return ORIG, PARA
 
-    def build_dataset(self, src_field, trg_field):
+    def build_dataset(self, ORIG, PARA):
         train_val = TabularDataset(path=self.train_path, format='tsv',
-                                fields=[('src', src_field),
-                                        ('trg', trg_field)])
+                                fields=[('orig', ORIG),
+                                        ('para', PARA)])
         train, val = train_val.split(split_ratio=0.8)
         # FIXME: test data is too large!
         test = TabularDataset(path=self.test_path, format='tsv',
-                                fields=[('src', src_field),
-                                        ('trg', trg_field)])
+                                fields=[('orig', ORIG),
+                                        ('para', PARA)])
         return train, val, test
 
     # TODO: add sos token
-    def build_vocab(self, src_field, trg_field, *args):
+    def build_vocab(self, ORIG, PARA, *args):
         # not using pretrained word vectors
-        src_field.build_vocab(args, max_size=30000)
-        src_field.vocab.itos.insert(2, '<sos>')
+        ORIG.build_vocab(args, max_size=30000)
+        ORIG.vocab.itos.insert(2, '<sos>')
         from collections import defaultdict
         stoi = defaultdict(lambda x:0)
-        stoi.update({tok: i for i, tok in enumerate(src_field.vocab.itos)})
-        src_field.vocab.stoi = stoi
-        trg_field.vocab = src_field.vocab
-        return src_field.vocab
+        stoi.update({tok: i for i, tok in enumerate(ORIG.vocab.itos)})
+        ORIG.vocab.stoi = stoi
+        PARA.vocab = ORIG.vocab
+        return ORIG.vocab
 
     def build_iterator(self, train, val, test):
         train_iter, valid_iter, test_iter = \
         BucketIterator.splits((train, val, test), batch_size=32,
-                              sort_key=lambda x: (len(x.src), len(x.trg)),
+                              sort_key=lambda x: (len(x.orig), len(x.para)),
                               sort_within_batch=True, repeat=False,
                               device=torch.device('cuda'))
         return train_iter, valid_iter, test_iter
