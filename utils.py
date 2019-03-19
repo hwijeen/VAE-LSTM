@@ -1,6 +1,7 @@
+import math
 import torch
 
-from dataloading import EOS_IDX, SOS_IDX
+from dataloading import EOS_IDX, SOS_IDX, UNK_IDX
 
 
 def prepare_batch(batch):
@@ -25,7 +26,7 @@ def truncate(x, token=None):
 def append(x, token=None):
     # add a special token to a batch
     assert token in ['sos', 'eos'], 'can only append sos or eos'
-    x, lengths = x # (B, L)
+    x, lengths = x # (B, L), (B,)
     lengths += 1
     B = x.size(0)
     if token == 'eos':
@@ -35,29 +36,6 @@ def append(x, token=None):
         sos = x.new_full((B,1), SOS_IDX)
         x = torch.cat([sos, x], dim=1)
     return (x, lengths)
-
-
-def sequence_mask(lengths):
-    # make a mask matrix corresponding to given length
-    # from https://github.com/tensorflow/tensorflow/blob/r1.12/tensorflow/python/ops/array_ops.py
-    row_vector = torch.arange(0, max(lengths), device=lengths.device) # (L,)
-    matrix = lengths.unsqueeze(-1) # (B, 1)
-    result = row_vector < matrix # 1 for real tokens
-    return result # (B, L)
-
-
-def get_actual_lengths(y):
-    # get actual length of a generated batch considering eos
-    non_zeros = (y == EOS_IDX).nonzero()
-    num_nonzeros = non_zeros.size(0)
-    is_dirty = [False for _ in range(num_nonzeros)]
-    lengths = []
-    for idx in non_zeros:
-        i, j = idx[0].item(), idx[1].item()
-        if not is_dirty[i]:
-            is_dirty[i] = True
-            lengths.append(j+1) # zero-index
-    return torch.tensor(lengths, device=non_zeros.device)
 
 
 def reverse(batch, vocab):
@@ -76,4 +54,16 @@ def reverse(batch, vocab):
     return batch
 
 
+def kl_coef(i):
+    # coef for KL annealing
+    # reaches 1 at i = 22000
+    # https://github.com/kefirski/pytorch_RVAE/blob/master/utils/functional.py
+    return (math.tanh((i - 3500)/1000) + 1) / 2
+
+
+def word_drop(x, p):
+    # note that is p is prob to drop
+    mask = torch.empty_like(x).bernoulli_(p).byte()
+    x.masked_fill_(mask, UNK_IDX)
+    return x
 

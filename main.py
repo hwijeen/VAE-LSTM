@@ -21,11 +21,10 @@ logger = logging.getLogger(__name__)
 
 if  __name__ == "__main__":
 
-    #logger.info('loading data from... {}{}'.format(DATA_DIR, FILE))
     data = Data(DATA_DIR, FILE)
     vaeLSTM = build_VAELSTM(len(data.vocab), hidden_dim=600, latent_dim=1100,
-                            device=DEVICE)
-    trainer = Trainer(vaeLSTM, data)
+                            word_drop=0.3, device=DEVICE)
+    trainer = Trainer(vaeLSTM, data, lr=0.003)
 
-    trainer.train(epoch=1)
+    trainer.train(epoch=10)
 
