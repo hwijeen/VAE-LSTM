@@ -27,6 +27,7 @@ class VAELSTM(nn.Module):
         return logits, mu, log_var # (B, L, vocab_size), (B, 1100), (B, 1100)
 
 
+# TODO: try encoder without conditioning on para(y), as suggested in Sohn's paper
 class Encoder(nn.Module):
     def __init__(self, vocab_size, hidden_dim=600):
         super().__init__()
@@ -65,7 +66,7 @@ class Decoder(nn.Module):
     def forward(self, orig, para, z):
         orig, orig_lengths = orig # (B, l), (B,)
         para, para_lengths = append(truncate(para, 'eos'), 'sos')
-        para = word_drop(para, self.word_drop)
+        para = word_drop(para, self.word_drop) # technique to alleviate KL vanishing prob, introduced in Bowman's paper
         orig = self.embedding(orig) # (B, l, 300)
         para = self.embedding(para)
         L = para.size(1)
@@ -76,7 +77,7 @@ class Decoder(nn.Module):
         _, orig_hidden = self.lstm_orig(orig_packed)
         # TODO: consider feeding para_z as an input to each time step
         # (B, L, 600)
-        para_output, _ = self.lstm_para(para_z, orig_hidden)
+        para_output, _ = self.lstm_para(para_z, orig_hidden) # no packing
         logits = self.linear(para_output)
         return logits, para_lengths # (B, L, vocab_size), (B,)
 

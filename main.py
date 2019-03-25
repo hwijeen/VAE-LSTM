@@ -13,7 +13,7 @@ FILE = 'mscoco'
 DEVICE = torch.device('cuda:0')
 
 
-setproctitle("(paraphrase) testing")
+setproctitle("(hwijeen) VAE-LSTM")
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,8 +23,8 @@ if  __name__ == "__main__":
 
     data = Data(DATA_DIR, FILE)
     vaeLSTM = build_VAELSTM(len(data.vocab), hidden_dim=600, latent_dim=1100,
-                            word_drop=0.3, device=DEVICE)
-    trainer = Trainer(vaeLSTM, data, lr=0.003)
+                            word_drop=0.5, device=DEVICE)
+    trainer = Trainer(vaeLSTM, data, lr=0.001)
 
-    trainer.train(epoch=10)
+    trainer.train(num_epoch=10)
 
