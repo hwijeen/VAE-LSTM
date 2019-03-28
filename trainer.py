@@ -45,14 +45,14 @@ class Trainer(object):
         self.optimizer = optim.Adam(model.parameters(), lr=lr)
         self.stats = Stats()
 
-    def _compute_loss(self, batch, total_step):
-        (logits, _), mu, log_var = self.model(batch.orig, batch.para)
+    def _compute_loss(self, batch, total_step=None):
+        logits, mu, log_var = self.model(batch.orig, batch.para)
         B, L, _ = logits.size()
         target, _ = batch.para
         recon_loss = self.criterion(logits.view(B*L, -1), target.view(-1))
         kl_loss = torch.sum((log_var - log_var.exp() - mu.pow(2) + 1)
                             * -0.5, dim=1).mean() 
-        coef = kl_coef(total_step) # kl annlealing 
+        coef = kl_coef(total_step) if total_step is not None else None# kl annlealing 
         return recon_loss, kl_loss, coef
 
     # TODO: BOW loss
@@ -76,12 +76,22 @@ class Trainer(object):
             with torch.no_grad():
                 valid_stats = {'recon_loss': [], 'kl_loss': []}
                 for batch in self.data.valid_iter:
-                    recon_loss, kl_loss = self._compute_loss(batch)
-                    self.stats.record_stats(stats=valid_stats)
+                    recon_loss, kl_loss, _= self._compute_loss(batch)
+                    self.stats.record_stats(recon_loss, kl_loss, stats=valid_stats)
                 self.stats.report_stats(epoch, stats=valid_stats, is_train=False)
+                self.inference(data_iter=self.data.valid_iter)
 
-    def inference(self):
-        pass
+    def inference(self, data_iter=None):
+        if data_iter is not None: # for valid data
+            data_iter.shuffle = True 
+            batch = next(iter(data_iter))
+            generated = self.model(batch.orig)
+            generated = reverse(generated, self.data.vocab)
+            for sent in generated:
+                print(sent)
+        else:
+            data_iter = self.data.test_iter 
+
 
 
     # TODO: early stopping
