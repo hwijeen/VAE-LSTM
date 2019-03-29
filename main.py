@@ -5,7 +5,7 @@ import torch
 
 from dataloading import Data
 from model import build_VAELSTM
-from trainer import Trainer
+from trainer import Trainer, Trainer_BOW
 
 
 DATA_DIR = '/home/nlpgpu5/hwijeen/VAE-LSTM/data/'
@@ -23,8 +23,9 @@ if  __name__ == "__main__":
 
     data = Data(DATA_DIR, FILE)
     vaeLSTM = build_VAELSTM(len(data.vocab), hidden_dim=600, latent_dim=1100,
-                            word_drop=0.5, device=DEVICE)
-    trainer = Trainer(vaeLSTM, data, lr=0.001)
+                            word_drop=0., bow_loss=True, device=DEVICE)
+    #trainer = Trainer(vaeLSTM, data, lr=0.001)
+    trainer = Trainer_BOW(vaeLSTM, data, lr=0.001)
 
     trainer.train(num_epoch=10)
 

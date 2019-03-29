@@ -8,8 +8,10 @@ from utils import append, truncate, word_drop
 
 MAXLEN = 15
 
+
 class VAELSTM(nn.Module):
-    def __init__(self, encoder, decoder, hidden_dim=600, latent_dim=1100):
+    def __init__(self, encoder, decoder, vocab_size=None, hidden_dim=600,
+                 latent_dim=1100):
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
@@ -35,6 +37,21 @@ class VAELSTM(nn.Module):
         z = torch.randn(B, 1, self.latent_dim, device= orig[0].device) # sample from prior
         generated = self.decoder.inference(orig, z)
         return generated # (B, MAXLEN)
+
+
+class VAELSTM_BOW(VAELSTM):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.bow_linear = nn.Linear(args[4], args[2])
+
+    def forward(self, orig, para=None): # overriding
+        h_t = self.encoder(orig, para)
+        mu = self.mu_linear(h_t)
+        log_var = self.var_linear(h_t)
+        z = self._reparameterize(mu, log_var)
+        logits = self.decoder(orig, para, z)
+        bow_logits = self.bow_linear(z).squeeze(1)
+        return logits, mu, log_var, bow_logits # (B, vocab_size)
 
 
 # TODO: try encoder without conditioning on para(y), as suggested in Sohn's paper
@@ -80,7 +97,8 @@ class Decoder(nn.Module):
                                            batch_first=True)
         _, orig_hidden = self.lstm_orig(orig_packed)
         para, _ = append(truncate(para, 'eos'), 'sos')
-        para = word_drop(para, self.word_drop) # from Bowman's paper
+        if self.word_drop > 0.:
+            para = word_drop(para, self.word_drop) # from Bowman's paper
         para = self.embedding(para)
         L = para.size(1)
         para_z = torch.cat([para, z.repeat(1, L, 1)], dim=-1) # (B, L, 1100+300)
@@ -110,13 +128,16 @@ class Decoder(nn.Module):
         return torch.cat(y, dim=-1) # (B, L)
 
 
-def build_VAELSTM(vocab_size, hidden_dim, latent_dim, word_drop,
+def build_VAELSTM(vocab_size, hidden_dim, latent_dim, word_drop, bow_loss,
                   share_emb=False, share_orig_enc=False, device=None):
     encoder = Encoder(vocab_size, hidden_dim)
     decoder = Decoder(vocab_size, hidden_dim, latent_dim, word_drop)
     if share_emb:
         decoder.embedding.weight = encoder.embedding.weight
-    vaeLSTM = VAELSTM(encoder, decoder, hidden_dim, latent_dim)
-    return vaeLSTM.to(device)
+    if bow_loss:
+        model = VAELSTM_BOW(encoder, decoder, vocab_size, hidden_dim, latent_dim)
+    else:
+        model = VAELSTM(encoder, decoder, vocab_size, hidden_dim, latent_dim)
+    return model.to(device)
 
 
