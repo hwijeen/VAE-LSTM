@@ -4,14 +4,6 @@ import torch
 from dataloading import EOS_IDX, SOS_IDX, UNK_IDX
 
 
-def prepare_batch(batch):
-    # attach the opposite label to a batch
-    x, lengths = batch.sent
-    l = batch.label
-    l_ = (l != 1).long()
-    return (x, lengths), l, l_
-
-
 def truncate(x, token=None):
     # delete a special token in a batch
     assert token in ['sos', 'eos', 'both'], 'can only truncate sos or eos'
@@ -50,7 +42,7 @@ def reverse(batch, vocab):
             sentence.append(w)
         return sentence
     batch = [trim(ex, EOS_IDX) for ex in batch]
-    batch = [[vocab.itos[i] for i in ex] for ex in batch]
+    batch = [' '.join([vocab.itos[i] for i in ex]) for ex in batch]
     return batch
 
 
@@ -62,7 +54,7 @@ def kl_coef(i):
 
 
 def word_drop(x, p):
-    # note that is p is prob to drop
+    # p is prob to drop
     mask = torch.empty_like(x).bernoulli_(p).byte()
     x.masked_fill_(mask, UNK_IDX)
     return x

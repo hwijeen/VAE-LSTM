@@ -1,4 +1,5 @@
 import logging
+import random
 
 import numpy as np
 import torch
@@ -6,7 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from dataloading import PAD_IDX
-from utils import prepare_batch, reverse, kl_coef
+from utils import reverse, kl_coef
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ class Stats(object):
         stats['recon_loss'].append(recon_loss.item())
         stats['kl_loss'].append(kl_loss.item())
 
-    # do not consider kl coef when reporting running average of loss
+    # do not consider kl coef when reporting average of loss
     def report_stats(self, epoch, step=None, stats=None, is_train=True):
         stats = self.stats if stats is None else stats
         recon_loss = np.mean(stats['recon_loss'])
@@ -51,13 +52,13 @@ class Trainer(object):
         target, _ = batch.para
         recon_loss = self.criterion(logits.view(B*L, -1), target.view(-1))
         kl_loss = torch.sum((log_var - log_var.exp() - mu.pow(2) + 1)
-                            * -0.5, dim=1).mean() 
-        coef = kl_coef(total_step) if total_step is not None else None# kl annlealing 
+                            * -0.5, dim=1).mean()
+        coef = kl_coef(total_step) if total_step is not None else None # kl annlealing
         return recon_loss, kl_loss, coef
 
     # TODO: BOW loss
     def train(self, num_epoch):
-        total_step = 0 # for KL annealing 
+        total_step = 0 # for KL annealing
         for epoch in range(num_epoch):
             self.stats.reset_stats()
             for step, batch in enumerate(self.data.train_iter, 1): # total 8280 step
@@ -83,38 +84,18 @@ class Trainer(object):
 
     def inference(self, data_iter=None):
         if data_iter is not None: # for valid data
-            data_iter.shuffle = True 
-            batch = next(iter(data_iter))
-            generated = self.model(batch.orig)
-            generated = reverse(generated, self.data.vocab)
-            for sent in generated:
-                print(sent)
+            data_iter.shuffle = True
+            data_type = 'valid'
         else:
-            data_iter = self.data.test_iter 
+            data_iter = self.data.test_iter
+            data_type = 'test'
+        random_idx = random.randint(0, len(data_iter))
+        for idx, batch in enumerate(data_iter): # to get a random batch
+            if idx == random_idx: break
+        paraphrased = self.model(batch.orig)
+        original = reverse(batch.orig[0], self.data.vocab)
+        paraphrased = reverse(paraphrased, self.data.vocab)
+        print('sample paraphrases in {} data'.format(data_type))
+        for orig, para in zip(original, paraphrased):
+            print(orig, '\t => \t', para)
 
-
-
-    # TODO: early stopping
-#    def evaluate(self):
-#        self.data.valid_iter.shuffle = True
-#        import random
-#        a = random.randint(0, len(self.data.valid_iter)) # temp test
-#        for i, batch in enumerate(self.data.valid_iter):
-#            if i != a: continue
-#            (x, lengths), l, l_ = prepare_batch(batch)
-#            generated = self.model((x, lengths), l, l_, is_gen=True)
-#            print('=' * 50)
-#            print('original \t\t -> \t\t changed')
-#            for idx in random.sample(range(lengths.size(0)), 5):
-#                ori = reverse(x, self.data.vocab)[idx]
-#                chg = reverse(generated[0], self.data.vocab)[idx]
-#                print(' '.join(ori))
-#                print('\t\t->', ' '.join(chg))
-#            print('=' * 50)
-#            return
-
-    #def decode(self, gen_logit):
-        #pass
-
-    #def inference(self, pos_test_iter, neg_test_iter):
-    #    pass
