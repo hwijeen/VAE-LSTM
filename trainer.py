@@ -83,19 +83,20 @@ class Trainer(object):
                 self.inference(data_iter=self.data.valid_iter)
 
     def inference(self, data_iter=None):
-        if data_iter is not None: # for valid data
-            data_iter.shuffle = True
-            data_type = 'valid'
-        else:
-            data_iter = self.data.test_iter
-            data_type = 'test'
+        data_type = 'valid' if data_iter is not None else 'test'
         random_idx = random.randint(0, len(data_iter))
         for idx, batch in enumerate(data_iter): # to get a random batch
             if idx == random_idx: break
-        paraphrased = self.model(batch.orig)
-        original = reverse(batch.orig[0], self.data.vocab)
+        paraphrased = self.model.inference(batch.orig)
         paraphrased = reverse(paraphrased, self.data.vocab)
+        original = reverse(batch.orig[0], self.data.vocab)
+        reference = reverse(batch.para[0], self.data.vocab) if data_type == 'valid' else None
         print('sample paraphrases in {} data'.format(data_type))
-        for orig, para in zip(original, paraphrased):
-            print(orig, '\t => \t', para)
+        if data_type == 'valid':
+            for orig, para, ref in zip(original, paraphrased, reference):
+                print(orig, '\t => \t', para)
+                print('\t\t\t reference: ', ref)
+        else:
+            for orig, para in zip(original, paraphrased):
+                print(orig, '\t => \t', para)
 
