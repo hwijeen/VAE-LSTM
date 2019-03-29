@@ -24,8 +24,9 @@ if  __name__ == "__main__":
     data = Data(DATA_DIR, FILE)
     vaeLSTM = build_VAELSTM(len(data.vocab), hidden_dim=600, latent_dim=1100,
                             word_drop=0., bow_loss=True, device=DEVICE)
-    #trainer = Trainer(vaeLSTM, data, lr=0.001)
-    trainer = Trainer_BOW(vaeLSTM, data, lr=0.001)
+    #trainer = Trainer(vaeLSTM, data, lr=0.001, to_record=['recon_loss', 'kl_loss'])
+    trainer = Trainer_BOW(vaeLSTM, data, lr=0.001, to_record=['recon_loss',
+                                                              'kl_loss', 'bow_loss'])
 
     trainer.train(num_epoch=10)
 
