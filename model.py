@@ -26,15 +26,15 @@ class VAELSTM(nn.Module):
 
     def forward(self, orig, para=None):
         h_t = self.encoder(orig, para)
-        mu = self.mu_linear(h_t)
-        log_var = self.var_linear(h_t)
+        mu = self.mu_linear(h_t) # (B, latent_dim)
+        log_var = self.var_linear(h_t) # (B, latent_dim)
         z = self._reparameterize(mu, log_var)
         logits = self.decoder(orig, para, z)
         return logits, mu, log_var # ((B, L, vocab_size), (B, 1100), (B, 1100)
 
     def inference(self, orig):
         B = orig[0].size(0)
-        z = torch.randn(B, 1, self.latent_dim, device= orig[0].device) # sample from prior
+        z = torch.randn(B, 1, self.latent_dim, device=orig[0].device) # sample from prior
         generated = self.decoder.inference(orig, z)
         return generated # (B, MAXLEN)
 
@@ -75,7 +75,7 @@ class Encoder(nn.Module):
         para_output, _ = self.lstm_para(para, orig_hidden)
         B = para.size(0)
         h_t = para_output[range(B), para_lengths-1]
-        return h_t
+        return h_t # (B, hidden_dim)
 
 
 class Decoder(nn.Module):

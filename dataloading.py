@@ -14,19 +14,20 @@ EOS_IDX = 3
 
 
 class Data(object):
-    def __init__(self, data_dir, file):
+    def __init__(self, data_dir, file, device, use_glove=False):
         self.name = file
-        data_dir =  os.path.join(data_dir, file)
+        self.device = device
+        data_dir = os.path.join(data_dir, file)
         self.train_path = os.path.join(data_dir, 'train.txt')
         self.test_path = os.path.join(data_dir, 'test.txt')
-        self.build()
+        self.build(use_glove)
 
-    def build(self):
+    def build(self, use_glove):
         self.ORIG, self.PARA = self.build_field(maxlen=MAXLEN)
         logger.info('building datasets... this takes a while')
         self.train, self.val, self.test =\
             self.build_dataset(self.ORIG, self.PARA)
-        self.vocab = self.build_vocab(self.ORIG, self.PARA,
+        self.vocab = self.build_vocab(self.ORIG, self.PARA, use_glove,
                                       self.train.orig, self.train.para,
                                       self.val.orig, self.val.para)
         self.train_iter, self.valid_iter, self.test_iter =\
@@ -57,12 +58,13 @@ class Data(object):
         return train, val, test
 
     # TODO: add sos token
-    def build_vocab(self, ORIG, PARA, *args):
+    def build_vocab(self, ORIG, PARA, use_glove, *args):
         # not using pretrained word vectors
-        ORIG.build_vocab(args, max_size=30000)
+        v = 'glove.6B.300d' if use_glove else None
+        ORIG.build_vocab(args, max_size=30000, vectors=v)
         ORIG.vocab.itos.insert(2, '<sos>')
         from collections import defaultdict
-        stoi = defaultdict(lambda x:0)
+        stoi = defaultdict(lambda: 0)
         stoi.update({tok: i for i, tok in enumerate(ORIG.vocab.itos)})
         ORIG.vocab.stoi = stoi
         PARA.vocab = ORIG.vocab
@@ -73,7 +75,7 @@ class Data(object):
         BucketIterator.splits((train, val, test), batch_size=32,
                               sort_key=lambda x: (len(x.orig), len(x.para)),
                               sort_within_batch=True, repeat=False,
-                              device=torch.device('cuda'))
+                              device=self.device)
         return train_iter, valid_iter, test_iter
 
 

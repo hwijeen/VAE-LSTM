@@ -1,3 +1,4 @@
 neural-paraphrase-generation/
 data/
+.vectors_cache/
 *.pyc
